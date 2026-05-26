@@ -1,4 +1,8 @@
+import os
+import numpy as np
 import torch
+from PIL import Image
+import folder_paths
 
 
 class ImageRouteBySize:
@@ -60,12 +64,58 @@ class ImagePickByFlag:
         return (image_a if needs_resize == 1 else image_b,)
 
 
+class SaveImageJPEG:
+    """
+    Saves images as JPEG to the ComfyUI output folder.
+    Returns the saved filenames so they appear in the history viewer.
+    """
+
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images":          ("IMAGE",),
+                "filename_prefix": ("STRING", {"default": "output"}),
+                "quality":         ("INT",    {"default": 95, "min": 1, "max": 100, "step": 1}),
+            }
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION     = "save_jpeg"
+    OUTPUT_NODE  = True
+    CATEGORY     = "image/routing"
+
+    def save_jpeg(self, images, filename_prefix, quality):
+        results = []
+        for image in images:
+            img_np = (image.cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_np, "RGB")
+
+            counter = 1
+            while True:
+                filename = f"{filename_prefix}_{counter:05d}_.jpg"
+                if not os.path.exists(os.path.join(self.output_dir, filename)):
+                    break
+                counter += 1
+
+            pil_img.save(os.path.join(self.output_dir, filename), "JPEG", quality=quality)
+            results.append({"filename": filename, "subfolder": "", "type": self.type})
+
+        return {"ui": {"images": results}}
+
+
 NODE_CLASS_MAPPINGS = {
     "ImageRouteBySize": ImageRouteBySize,
     "ImagePickByFlag":  ImagePickByFlag,
+    "SaveImageJPEG":    SaveImageJPEG,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageRouteBySize": "Image Route By Size",
     "ImagePickByFlag":  "Image Pick By Flag",
+    "SaveImageJPEG":    "Save Image (JPEG)",
 }
